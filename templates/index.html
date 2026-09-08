@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Doc_Bot</title>
+</head>
+<body>
+    <h1>Doc_Bot</h1>
+    <p>The Rag document assistant.</p>
+    <input type="text" id="question-box">
+    <button id="send-btn">Send</button>
+    <select id="folder-select">
+        <option value="">-- Choose a folder --</option>
+        <option value="production">Production</option>
+        <option value="maintenance">Maintenance</option>
+        <option value="personnel">Personnel</option>
+        <option value="management">Management</option>
+    </select>
+    <input type="file" id="document-input">
+    <button id="upload-btn">Upload</button>
+    <div id="answer-area"></div>
+    <div id="upload-status"></div>
+
+    <script>
+        const box = document.getElementById("question-box");
+        const btn = document.getElementById("send-btn");
+        const answer = document.getElementById("answer-area");
+        const uploadBtn = document.getElementById("upload-btn");
+        const folderSelect = document.getElementById("folder-select");
+        const documentInput = document.getElementById("document-input");
+        const uploadStatus = document.getElementById("upload-status");
+
+        btn.addEventListener("click", function () {
+            const theText = box.value;
+
+            fetch("/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question : theText })
+            })
+            .then(function (response) {return response.text(); })
+            .then(function (data) {
+                answer.textContent= data
+            });
+        });
+
+        uploadBtn.addEventListener("click", async function () {
+            const folder = folderSelect.value;
+            const file = documentInput.files[0];
+
+            if (!folder || !file) {
+                uploadStatus.textContent = "File and or folder field cannot be empty.";
+                return;
+            }
+            const response = await fetch("/check-exists", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ folder_name: folder, file_name: file.name })
+            });
+            const result = await response.json();
+            const exists = result.exists;
+
+            if (exists && !confirm("A document with this name already exists. Click OK to overwrite, or Cancel to stop (rename the file on your computer and try again).")) {
+                uploadStatus.textContent = "Upload cancelled.";
+                return;
+            }
+            uploadStatus.textContent = "Uploading file now. This may take a few moments...";
+            const data = new FormData();
+            data.append("folder_name", folder);
+            data.append("document", file);
+            
+            fetch("/upload", {
+                method: "POST",
+                body: data
+            })
+            .then(function (response) {return response.text(); })
+            .then(function (data) {
+                uploadStatus.textContent = data;
+            });
+        });
+
+
+
+    </script>    
+</body>
+</html>
