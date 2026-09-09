@@ -4,3 +4,4 @@ chroma_db/
 doc_store/
 __pycache__/
 *.pyc
+Documents/*

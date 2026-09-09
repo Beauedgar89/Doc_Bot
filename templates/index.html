@@ -1,85 +1,489 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doc_Bot</title>
+    <!-- marked.js must load before the app script so marked.parse is defined when /ask returns -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --michelin-blue: #001A70;
+            --header-blue: #0A2A6B;
+            --work-blue: #2456B8;
+            --bg: #0C0F17;
+            --panel: #161B27;
+            --panel-2: #1D2433;
+            --line: #2A3244;
+            --ink: #E8ECF4;
+            --muted: #8A94A8;
+            --accent: #F2C230;
+            --accent-ink: #1A1D24;
+            --ok: #4ADE80;
+            --danger: #F87171;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: "Inter", system-ui, -apple-system, sans-serif;
+            font-size: 16px;
+            line-height: 1.55;
+        }
+
+        body { display: flex; flex-direction: column; height: 100vh; }
+
+        /* ---------- Header ---------- */
+        header {
+            background: var(--header-blue);
+            border-bottom: 3px solid var(--accent);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: var(--accent-ink);
+            display: flex; align-items: center; justify-content: center;
+            font-family: "JetBrains Mono", monospace;
+            font-weight: 700;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .title-block { display: flex; flex-direction: column; line-height: 1.2; }
+        .app-name {
+            font-family: "JetBrains Mono", monospace;
+            font-weight: 700;
+            font-size: 19px;
+            color: #fff;
+            letter-spacing: -0.5px;
+        }
+        .app-sub { font-size: 12px; color: #AFC0E8; }
+
+        /* ---------- Conversation area ---------- */
+        .hint {
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+            padding: 18px 24px 6px;
+            flex-shrink: 0;
+        }
+
+        .transcript-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 24px 24px;
+        }
+
+        .transcript {
+            max-width: 860px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .turn { display: flex; flex-direction: column; gap: 8px; }
+
+        .bubble {
+            padding: 14px 18px;
+            border: 1px solid var(--line);
+            max-width: 88%;
+        }
+
+        .bubble-q {
+            align-self: flex-end;
+            background: var(--work-blue);
+            border-color: var(--work-blue);
+            color: #fff;
+        }
+
+        .bubble-a {
+            align-self: flex-start;
+            background: var(--panel);
+            border-left: 4px solid var(--accent);
+        }
+
+        .bubble-a.thinking { color: var(--muted); font-style: italic; }
+
+        .bubble-a p:first-child { margin-top: 0; }
+        .bubble-a p:last-child { margin-bottom: 0; }
+        .bubble-a strong { color: var(--accent); }
+        .bubble-a ul, .bubble-a ol { padding-left: 22px; }
+        .bubble-a code {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.9em;
+            background: var(--panel-2);
+            padding: 1px 5px;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--muted);
+            margin-top: 15vh;
+            font-size: 15px;
+        }
+
+        /* ---------- Bottom bar ---------- */
+        .composer {
+            flex-shrink: 0;
+            border-top: 1px solid var(--line);
+            background: var(--bg);
+            padding: 14px 24px 18px;
+        }
+        .composer-inner {
+            max-width: 860px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #question-box {
+            flex: 1;
+            padding: 14px 16px;
+            font-family: inherit;
+            font-size: 16px;
+            color: var(--ink);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            outline: none;
+            transition: border-color 0.12s ease;
+        }
+        #question-box:focus { border-color: var(--work-blue); }
+        #question-box::placeholder { color: var(--muted); }
+
+        button {
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            padding: 14px 22px;
+            transition: background-color 0.12s ease, border-color 0.12s ease;
+        }
+
+        .btn-send {
+            background: var(--accent);
+            color: var(--accent-ink);
+        }
+        .btn-send:hover { background: #F7D35A; }
+
+        .btn-upload {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+        .btn-upload:hover { background: rgba(242, 194, 48, 0.12); }
+
+        /* ---------- Upload modal ---------- */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(6, 9, 15, 0.72);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .overlay.open { display: flex; }
+
+        .modal {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-top: 3px solid var(--accent);
+            width: 100%;
+            max-width: 440px;
+            margin: 24px;
+            padding: 24px;
+        }
+
+        .modal h2 {
+            margin: 0 0 4px;
+            font-size: 18px;
+            color: #fff;
+        }
+        .modal .modal-sub {
+            margin: 0 0 20px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .field { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+        .field label { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+        select, input[type="file"] {
+            font-family: inherit;
+            font-size: 15px;
+            color: var(--ink);
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            padding: 11px 13px;
+            outline: none;
+            width: 100%;
+        }
+        select { cursor: pointer; }
+        select:focus, input[type="file"]:focus { border-color: var(--work-blue); }
+        input[type="file"]::file-selector-button {
+            font-family: inherit;
+            font-weight: 600;
+            color: var(--accent-ink);
+            background: var(--accent);
+            border: none;
+            padding: 7px 12px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 22px;
+        }
+        .btn-cancel {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid var(--line);
+        }
+        .btn-cancel:hover { color: var(--ink); border-color: var(--muted); }
+        .btn-confirm { background: var(--accent); color: var(--accent-ink); }
+        .btn-confirm:hover { background: #F7D35A; }
+
+        #upload-status {
+            margin-top: 16px;
+            font-size: 14px;
+            color: var(--muted);
+            min-height: 20px;
+        }
+        #upload-status.working { color: var(--ink); border-left: 3px solid var(--accent); padding-left: 12px; }
+
+        .home-upload-status {
+            max-width: 860px;
+            margin: 10px auto 0;
+            font-size: 13px;
+            color: var(--muted);
+            min-height: 18px;
+            text-align: center;
+            display: none;
+        }
+        .home-upload-status.shown { display: block; }
+        .home-upload-status.working { color: var(--accent); }
+        .home-upload-status.done { color: var(--ok); }
+        .home-upload-status.error { color: var(--danger); }
+
+        @media (max-width: 560px) {
+            .composer-inner { flex-wrap: wrap; }
+            #question-box { order: -1; width: 100%; flex-basis: 100%; }
+        }
+    </style>
 </head>
 <body>
-    <h1>Doc_Bot</h1>
-    <p>The Rag document assistant.</p>
-    <input type="text" id="question-box">
-    <button id="send-btn">Send</button>
-    <select id="folder-select">
-        <option value="">-- Choose a folder --</option>
-        <option value="production">Production</option>
-        <option value="maintenance">Maintenance</option>
-        <option value="personnel">Personnel</option>
-        <option value="management">Management</option>
-    </select>
-    <input type="file" id="document-input">
-    <button id="upload-btn">Upload</button>
-    <div id="answer-area"></div>
-    <div id="upload-status"></div>
+    <header>
+        <div class="logo">DB</div>
+        <div class="title-block">
+            <span class="app-name">Doc_Bot</span>
+            <span class="app-sub">RAG document assistant · Dataiku LLM Mesh</span>
+        </div>
+    </header>
+
+    <div class="hint">Ask about production, maintenance, personnel, or management documents.</div>
+
+    <div class="transcript-wrap">
+        <div class="transcript" id="transcript">
+            <div class="empty-state" id="empty-state">Ask a question to get started.</div>
+        </div>
+    </div>
+
+    <div class="composer">
+        <div class="composer-inner">
+            <button id="upload-btn" class="btn-upload">Upload</button>
+            <input type="text" id="question-box" placeholder="Ask something about your documents…">
+            <button id="send-btn" class="btn-send">Ask</button>
+        </div>
+        <div id="home-upload-status" class="home-upload-status"></div>
+    </div>
+
+    <!-- Upload modal -->
+    <div class="overlay" id="upload-overlay">
+        <div class="modal">
+            <h2>Upload a document</h2>
+            <p class="modal-sub">Choose a folder and a file. Re-uploading a document with the same name replaces the old version.</p>
+            <div class="field">
+                <label for="folder-select">Folder</label>
+                <select id="folder-select">
+                    <option value="">— Choose a folder —</option>
+                    <option value="production">Production</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="personnel">Personnel</option>
+                    <option value="management">Management</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="document-input">File</label>
+                <input type="file" id="document-input" accept=".pdf,.docx,.md">
+            </div>
+            <div id="upload-status"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="upload-cancel">Cancel</button>
+                <button class="btn-confirm" id="upload-confirm">Upload</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const box = document.getElementById("question-box");
         const btn = document.getElementById("send-btn");
-        const answer = document.getElementById("answer-area");
+        const transcript = document.getElementById("transcript");
+        const emptyState = document.getElementById("empty-state");
+        const transcriptWrap = document.querySelector(".transcript-wrap");
+
         const uploadBtn = document.getElementById("upload-btn");
+        const overlay = document.getElementById("upload-overlay");
+        const uploadCancel = document.getElementById("upload-cancel");
+        const uploadConfirm = document.getElementById("upload-confirm");
         const folderSelect = document.getElementById("folder-select");
         const documentInput = document.getElementById("document-input");
         const uploadStatus = document.getElementById("upload-status");
+        const homeUploadStatus = document.getElementById("home-upload-status");
 
-        btn.addEventListener("click", function () {
-            const theText = box.value;
+        // paint a message on the home-screen status line next to the Upload button
+        function setHomeStatus(text, state) {
+            homeUploadStatus.textContent = text;   // our own plain strings -> textContent
+            homeUploadStatus.className = "home-upload-status shown" + (state ? " " + state : "");
+        }
+
+        // ---------- Ask flow: append a turn to the growing transcript ----------
+        function scrollToBottom() {
+            transcriptWrap.scrollTop = transcriptWrap.scrollHeight;
+        }
+
+        function addTurn(questionText) {
+            if (emptyState) emptyState.remove();
+
+            const turn = document.createElement("div");
+            turn.className = "turn";
+
+            const q = document.createElement("div");
+            q.className = "bubble bubble-q";
+            q.textContent = questionText;   // user text -> textContent (literal, safe)
+
+            const a = document.createElement("div");
+            a.className = "bubble bubble-a thinking";
+            a.textContent = "Searching the documents…";
+
+            turn.appendChild(q);
+            turn.appendChild(a);
+            transcript.appendChild(turn);
+            scrollToBottom();
+            return a;   // hand back the answer bubble so the fetch can fill it
+        }
+
+        function ask() {
+            const theText = box.value.trim();
+            if (!theText) return;
+            box.value = "";
+
+            const answerBubble = addTurn(theText);
 
             fetch("/ask", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question : theText })
+                body: JSON.stringify({ question: theText })
             })
-            .then(function (response) {return response.text(); })
+            .then(function (response) { return response.text(); })
             .then(function (data) {
-                answer.textContent= data
+                // /ask returns an LLM answer that may contain markdown -> render as HTML
+                answerBubble.classList.remove("thinking");
+                answerBubble.innerHTML = marked.parse(data);
+                scrollToBottom();
             });
+        }
+
+        btn.addEventListener("click", ask);
+        box.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") ask();
         });
 
-        uploadBtn.addEventListener("click", async function () {
+        // ---------- Upload modal ----------
+        function openModal() {
+            overlay.classList.add("open");
+            uploadStatus.textContent = "";
+            uploadStatus.classList.remove("working");
+            // leave any home-screen status from a previous upload visible
+        }
+        function closeModal() { overlay.classList.remove("open"); }
+
+        uploadBtn.addEventListener("click", openModal);
+        uploadCancel.addEventListener("click", closeModal);
+        overlay.addEventListener("click", function (e) {
+            if (e.target === overlay) closeModal();   // click backdrop to dismiss
+        });
+
+        uploadConfirm.addEventListener("click", async function () {
             const folder = folderSelect.value;
             const file = documentInput.files[0];
 
+            // Guard runs FIRST and stays inside the modal: closing it would hide
+            // the very message telling the user which field they missed.
+            uploadStatus.classList.remove("working");
             if (!folder || !file) {
-                uploadStatus.textContent = "File and or folder field cannot be empty.";
+                uploadStatus.textContent = "Choose a folder and a file before uploading.";
                 return;
             }
+
+            const fileName = file.name;
+
             const response = await fetch("/check-exists", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ folder_name: folder, file_name: file.name })
+                body: JSON.stringify({ folder_name: folder, file_name: fileName })
             });
             const result = await response.json();
             const exists = result.exists;
 
+            // Collision prompt fires while the modal is still up.
             if (exists && !confirm("A document with this name already exists. Click OK to overwrite, or Cancel to stop (rename the file on your computer and try again).")) {
-                uploadStatus.textContent = "Upload cancelled.";
+                // Guard passed but user cancelled: close modal, report on the home screen.
+                closeModal();
+                setHomeStatus("Upload cancelled — " + fileName + " was not changed.", "");
                 return;
             }
-            uploadStatus.textContent = "Uploading file now. This may take a few moments...";
+
+            // Guard + collision both cleared: close the popup, move status to the home screen.
+            closeModal();
+            setHomeStatus("Uploading " + fileName + " now. This may take a few minutes…", "working");
+
             const data = new FormData();
             data.append("folder_name", folder);
             data.append("document", file);
-            
+
             fetch("/upload", {
                 method: "POST",
                 body: data
             })
-            .then(function (response) {return response.text(); })
+            .then(function (response) { return response.text(); })
             .then(function (data) {
-                uploadStatus.textContent = data;
+                // /upload returns one of the four plain-text status strings.
+                // "success" is the only one that starts with "File successfully"; treat the rest as errors.
+                const ok = data.startsWith("File successfully");
+                setHomeStatus(data, ok ? "done" : "error");
             });
         });
-
-
-
-    </script>    
+    </script>
 </body>
 </html>
